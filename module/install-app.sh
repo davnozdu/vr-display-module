@@ -1,7 +1,8 @@
 #!/system/bin/sh
 # Ставит или обновляет VR Monitor из состава модуля.
 
-MODDIR=${MODDIR:-/data/adb/modules/vr_display_mode}
+MODDIR=${MODDIR:-${0%/*}}
+case "$MODDIR" in ""|.|"$0") MODDIR=/data/adb/modules/vr_display_mode;; esac
 . "$MODDIR/common.sh"
 
 APK="$MODDIR/vr-monitor.apk"

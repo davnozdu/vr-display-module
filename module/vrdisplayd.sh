@@ -1,7 +1,8 @@
 #!/system/bin/sh
 # Следит за DisplayPort и включает внешний дисплей, как только очки воткнули.
 
-MODDIR=${MODDIR:-/data/adb/modules/vr_display_mode}
+MODDIR=${MODDIR:-${0%/*}}
+case "$MODDIR" in ""|.|"$0") MODDIR=/data/adb/modules/vr_display_mode;; esac
 . "$MODDIR/common.sh"
 
 POLL_INTERVAL=2

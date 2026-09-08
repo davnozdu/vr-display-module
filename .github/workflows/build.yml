@@ -78,6 +78,11 @@ jobs:
           cp build/vr-monitor.apk "$STAGE/vr-monitor.apk"
           cp build/apk-versioncode "$STAGE/apk-versioncode"
 
+          # Zip не всегда доносит бит исполнения через распаковщик модуля,
+          # поэтому права выставляются и здесь, и в customize.sh, а сами
+          # скрипты всё равно вызываются через sh.
+          chmod 755 "$STAGE"/*.sh
+
           TAG="${GITHUB_REF_NAME}"
           case "$GITHUB_REF" in
             refs/tags/*)

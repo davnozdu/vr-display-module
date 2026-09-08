@@ -13,12 +13,17 @@ sleep 5
 
 log "=== модуль запущен (версия $(grep '^version=' "$MODDIR/module.prop" | cut -d= -f2)) ==="
 
-"$MODDIR/install-app.sh"
+sh "$MODDIR/install-app.sh"
 
 # Desktop mode на внешних дисплеях. Настройка читается системой в момент
 # подключения дисплея, поэтому выставляем её до того, как воткнут очки.
 settings put global force_desktop_mode_on_external_displays 1
 log "force_desktop_mode_on_external_displays = $(settings get global force_desktop_mode_on_external_displays)"
 
-nohup "$MODDIR/vrdisplayd.sh" >/dev/null 2>&1 &
-log "демон запущен"
+nohup sh "$MODDIR/vrdisplayd.sh" >/dev/null 2>&1 &
+sleep 2
+if pgrep -f vrdisplayd.sh >/dev/null 2>&1; then
+    log "демон запущен"
+else
+    log "ОШИБКА: демон не поднялся"
+fi
