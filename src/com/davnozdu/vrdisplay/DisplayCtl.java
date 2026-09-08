@@ -99,8 +99,30 @@ public final class DisplayCtl {
         }
     }
 
-    /** InputDevice.SOURCE_MOUSE */
-    private static final int SOURCE_MOUSE = 0x00002002;
+    // Источники указывающих устройств. Тачскрин сюда намеренно не входит:
+    // он тоже относится к классу POINTER, но привязывать экран телефона
+    // к внешнему дисплею нельзя.
+    private static final int SOURCE_MOUSE          = 0x00002002;
+    private static final int SOURCE_MOUSE_RELATIVE = 0x00008002;
+    private static final int SOURCE_TOUCHPAD       = 0x00100008;
+    private static final int SOURCE_TRACKBALL      = 0x00010004;
+
+    private static boolean isPointer(int sources) {
+        return (sources & SOURCE_MOUSE) == SOURCE_MOUSE
+                || (sources & SOURCE_MOUSE_RELATIVE) == SOURCE_MOUSE_RELATIVE
+                || (sources & SOURCE_TOUCHPAD) == SOURCE_TOUCHPAD
+                || (sources & SOURCE_TRACKBALL) == SOURCE_TRACKBALL;
+    }
+
+    /** Встроенные устройства не трогаем — уводить их на внешний экран незачем. */
+    private static boolean isExternal(Class<?> inputDevice, Object dev) {
+        try {
+            return (Boolean) inputDevice.getMethod("isExternal").invoke(dev);
+        } catch (Throwable t) {
+            // Метод скрытый; если его нет — считаем внешним и полагаемся на фильтр источников.
+            return true;
+        }
+    }
 
     private static Object inputManager() throws Exception {
         Class<?> serviceManager = Class.forName("android.os.ServiceManager");
@@ -160,7 +182,8 @@ public final class DisplayCtl {
             Object dev = inputDevice.getMethod("getDevice", int.class).invoke(null, id);
             if (dev == null) continue;
             int sources = (Integer) inputDevice.getMethod("getSources").invoke(dev);
-            if ((sources & SOURCE_MOUSE) != SOURCE_MOUSE) continue;
+            if (!isPointer(sources)) continue;
+            if (!isExternal(inputDevice, dev)) continue;
             String descriptor = (String) inputDevice.getMethod("getDescriptor").invoke(dev);
             String name = String.valueOf(inputDevice.getMethod("getName").invoke(dev));
             try {

@@ -41,8 +41,16 @@ try_enable() {
     return 1
 }
 
+# Отпечаток набора устройств ввода. По его изменению видно, что мышь или
+# пульт воткнули (или переподключили) уже после того, как дисплей поднялся.
+input_fingerprint() {
+    grep -c . /proc/bus/input/devices 2>/dev/null
+    grep "^N: Name=" /proc/bus/input/devices 2>/dev/null | sort | cksum
+}
+
 log "демон: старт"
 prev=""
+prev_inputs=""
 
 while true; do
     if dp_connected; then
@@ -54,6 +62,20 @@ while true; do
     if [ "$cur" != "$prev" ]; then
         log "DisplayPort: $cur"
         [ "$cur" = "connected" ] && try_enable
+        prev_inputs=$(input_fingerprint)
+    elif [ "$cur" = "connected" ]; then
+        # Дисплей на месте: следим за появлением новых указывающих устройств,
+        # чтобы мышь, воткнутая позже очков, тоже попала на внешний экран.
+        inputs=$(input_fingerprint)
+        if [ "$inputs" != "$prev_inputs" ]; then
+            log "набор устройств ввода изменился — перепривязка указателя"
+            pout=$(bind_pointers)
+            case "$pout" in
+                *"pointer bound"*) log "указатель привязан: $pout" ;;
+                *)                 log "привязка не выполнена: $pout" ;;
+            esac
+            prev_inputs=$inputs
+        fi
     fi
 
     prev=$cur
