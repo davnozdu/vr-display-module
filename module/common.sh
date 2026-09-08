@@ -40,3 +40,19 @@ enable_external_display() {
 bind_pointers() {
     CLASSPATH="$MODDIR/vrdisplay.dex" app_process /system/bin com.davnozdu.vrdisplay.DisplayCtl pointer 2>&1
 }
+
+# Поднимает сервис приложения. Нужно потому, что модуль ставит и обновляет
+# APK уже после BOOT_COMPLETED: своего автозапуска приложение в этот момент
+# не получит и молчало бы до следующей перезагрузки. Выключенный тумблер
+# мониторинга сервис проверяет сам и в этом случае сразу останавливается.
+start_app_service() {
+    if pm path "$PKG" >/dev/null 2>&1; then
+        if am start-foreground-service -n "$PKG/.UsbMonitorService" >/dev/null 2>&1; then
+            log "сервис приложения запущен"
+        else
+            log "не удалось запустить сервис приложения"
+        fi
+    else
+        log "приложение $PKG не установлено"
+    fi
+}

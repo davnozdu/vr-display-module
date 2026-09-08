@@ -14,6 +14,7 @@ sleep 5
 log "=== модуль запущен (версия $(grep '^version=' "$MODDIR/module.prop" | cut -d= -f2)) ==="
 
 sh "$MODDIR/install-app.sh"
+start_app_service
 
 # Desktop mode на внешних дисплеях. Настройка читается системой в момент
 # подключения дисплея, поэтому выставляем её до того, как воткнут очки.
