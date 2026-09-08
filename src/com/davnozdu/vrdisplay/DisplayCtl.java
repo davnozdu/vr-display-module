@@ -22,7 +22,9 @@ public final class DisplayCtl {
     public static void main(String[] args) {
         String cmd = args.length > 0 ? args[0] : "enable";
         try {
-            if ("methods".equals(cmd)) {
+            if ("pointer".equals(cmd)) {
+                System.exit(bindPointers() ? 0 : 1);
+            } else if ("methods".equals(cmd)) {
                 methods(args.length > 1 ? args[1] : "input",
                         args.length > 2 ? args[2] : "android.hardware.input.IInputManager");
             } else if ("list".equals(cmd)) {
@@ -30,7 +32,7 @@ public final class DisplayCtl {
             } else if ("enable".equals(cmd)) {
                 System.exit(enableExternal() ? 0 : 1);
             } else {
-                System.err.println("usage: DisplayCtl [enable|list|methods <service> <iface>]");
+                System.err.println("usage: DisplayCtl [enable|pointer|list|methods <service> <iface>]");
                 System.exit(2);
             }
         } catch (Throwable t) {
@@ -95,6 +97,82 @@ public final class DisplayCtl {
         } catch (Throwable t) {
             return "?";
         }
+    }
+
+    /** InputDevice.SOURCE_MOUSE */
+    private static final int SOURCE_MOUSE = 0x00002002;
+
+    private static Object inputManager() throws Exception {
+        Class<?> serviceManager = Class.forName("android.os.ServiceManager");
+        Class<?> iBinder = Class.forName("android.os.IBinder");
+        Object binder = serviceManager.getMethod("getService", String.class).invoke(null, "input");
+        if (binder == null) throw new IllegalStateException("input service missing");
+        Class<?> stub = Class.forName("android.hardware.input.IInputManager$Stub");
+        return stub.getMethod("asInterface", iBinder).invoke(null, binder);
+    }
+
+    /** uniqueId первого внешнего дисплея, или null. */
+    private static String externalDisplayUniqueId() throws Exception {
+        Object dm = displayManager();
+        for (int id : displayIds(dm)) {
+            if (id == 0) continue;
+            Object info = displayInfo(dm, id);
+            if (typeOf(info) != TYPE_EXTERNAL) continue;
+            try {
+                Object u = info.getClass().getField("uniqueId").get(info);
+                if (u != null) return u.toString();
+            } catch (Throwable ignored) {
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Привязывает указывающие устройства к внешнему дисплею.
+     *
+     * Без привязки курсор от пульта живёт на встроенном экране (dumpsys input
+     * показывает Pointer Display ID: 0) и попадает в очки только после
+     * передёргивания пульта. Привязка по дескриптору переживает
+     * переподключение устройства, в отличие от привязки по порту.
+     */
+    private static boolean bindPointers() throws Exception {
+        String uniqueId = externalDisplayUniqueId();
+        if (uniqueId == null) {
+            System.err.println("внешнего дисплея нет — привязывать не к чему");
+            return false;
+        }
+
+        Object im = inputManager();
+        Method bind = null;
+        for (Method m : im.getClass().getMethods()) {
+            if ("addUniqueIdAssociationByDescriptor".equals(m.getName())
+                    && m.getParameterTypes().length == 2) {
+                bind = m;
+                break;
+            }
+        }
+        if (bind == null) throw new NoSuchMethodException("addUniqueIdAssociationByDescriptor");
+
+        Class<?> inputDevice = Class.forName("android.view.InputDevice");
+        int[] ids = (int[]) inputDevice.getMethod("getDeviceIds").invoke(null);
+        boolean any = false;
+        for (int id : ids) {
+            Object dev = inputDevice.getMethod("getDevice", int.class).invoke(null, id);
+            if (dev == null) continue;
+            int sources = (Integer) inputDevice.getMethod("getSources").invoke(dev);
+            if ((sources & SOURCE_MOUSE) != SOURCE_MOUSE) continue;
+            String descriptor = (String) inputDevice.getMethod("getDescriptor").invoke(dev);
+            String name = String.valueOf(inputDevice.getMethod("getName").invoke(dev));
+            try {
+                bind.invoke(im, descriptor, uniqueId);
+                System.out.println("pointer bound: " + name + " -> " + uniqueId);
+                any = true;
+            } catch (Throwable t) {
+                System.err.println("не удалось привязать " + name + ": " + t.getCause());
+            }
+        }
+        if (!any) System.err.println("указывающих устройств не найдено");
+        return any;
     }
 
     /**

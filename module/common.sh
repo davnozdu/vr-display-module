@@ -34,3 +34,9 @@ dp_connected() {
 enable_external_display() {
     CLASSPATH="$MODDIR/vrdisplay.dex" app_process /system/bin com.davnozdu.vrdisplay.DisplayCtl enable 2>&1
 }
+
+# Привязка указателя к внешнему дисплею. Без неё курсор пульта остаётся на
+# экране телефона, и перебросить его удавалось только передёргиванием пульта.
+bind_pointers() {
+    CLASSPATH="$MODDIR/vrdisplay.dex" app_process /system/bin com.davnozdu.vrdisplay.DisplayCtl pointer 2>&1
+}

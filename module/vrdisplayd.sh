@@ -16,6 +16,21 @@ try_enable() {
         case "$out" in
             *"enabled display"*)
                 log "дисплей включён: $out"
+                # Пульт может подняться позже самого дисплея, поэтому
+                # привязываем указатель несколько раз с паузой.
+                j=0
+                while [ $j -lt 5 ]; do
+                    pout=$(bind_pointers)
+                    case "$pout" in
+                        *"pointer bound"*)
+                            log "указатель привязан: $pout"
+                            break
+                            ;;
+                    esac
+                    j=$((j + 1))
+                    sleep 2
+                done
+                [ $j -eq 5 ] && log "указатель привязать не удалось: $pout"
                 return 0
                 ;;
         esac
