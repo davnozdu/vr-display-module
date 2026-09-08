@@ -22,12 +22,15 @@ public final class DisplayCtl {
     public static void main(String[] args) {
         String cmd = args.length > 0 ? args[0] : "enable";
         try {
-            if ("list".equals(cmd)) {
+            if ("methods".equals(cmd)) {
+                methods(args.length > 1 ? args[1] : "input",
+                        args.length > 2 ? args[2] : "android.hardware.input.IInputManager");
+            } else if ("list".equals(cmd)) {
                 list();
             } else if ("enable".equals(cmd)) {
                 System.exit(enableExternal() ? 0 : 1);
             } else {
-                System.err.println("usage: DisplayCtl [enable|list]");
+                System.err.println("usage: DisplayCtl [enable|list|methods <service> <iface>]");
                 System.exit(2);
             }
         } catch (Throwable t) {
@@ -92,6 +95,33 @@ public final class DisplayCtl {
         } catch (Throwable t) {
             return "?";
         }
+    }
+
+    /**
+     * Разведка: печатает методы binder-интерфейса системного сервиса.
+     * Нужна, чтобы искать подходящий вызов, не угадывая имена вслепую.
+     */
+    private static void methods(String service, String iface) throws Exception {
+        Class<?> serviceManager = Class.forName("android.os.ServiceManager");
+        Class<?> iBinder = Class.forName("android.os.IBinder");
+        Object binder = serviceManager.getMethod("getService", String.class).invoke(null, service);
+        if (binder == null) {
+            System.out.println("нет сервиса " + service);
+            return;
+        }
+        Object proxy = Class.forName(iface + "$Stub")
+                .getMethod("asInterface", iBinder).invoke(null, binder);
+        java.util.TreeSet<String> names = new java.util.TreeSet<String>();
+        for (Method m : proxy.getClass().getMethods()) {
+            StringBuilder sb = new StringBuilder(m.getName()).append("(");
+            Class<?>[] ps = m.getParameterTypes();
+            for (int i = 0; i < ps.length; i++) {
+                if (i > 0) sb.append(", ");
+                sb.append(ps[i].getSimpleName());
+            }
+            names.add(sb.append(")").toString());
+        }
+        for (String n : names) System.out.println(n);
     }
 
     private static void list() throws Exception {
