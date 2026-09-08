@@ -1,0 +1,131 @@
+name: Build module
+
+on:
+  push:
+    branches: [ '**' ]
+    tags: [ 'v*' ]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install build-tools
+        run: sdkmanager --install "build-tools;35.0.0" "platforms;android-35"
+
+      - name: Compile DisplayCtl to dex
+        run: |
+          set -eu
+          BT="$ANDROID_HOME/build-tools/35.0.0"
+          AJ="$ANDROID_HOME/platforms/android-35/android.jar"
+          mkdir -p build/classes build/out
+          # Класс обращается к скрытым API только рефлексией, поэтому
+          # компилируется обычным публичным android.jar.
+          javac -source 8 -target 8 -nowarn \
+                -bootclasspath "$AJ" \
+                -d build/classes \
+                $(find src -name '*.java')
+          "$BT/d8" --release --min-api 26 \
+                --output build/out \
+                $(find build/classes -name '*.class')
+          test -f build/out/classes.dex
+
+      - name: Fetch latest VR Monitor APK
+        run: |
+          set -eu
+          URL=$(curl -fsSL https://api.github.com/repos/davnozdu/vr-usb-monitor/releases/latest \
+                | grep -o '"browser_download_url": *"[^"]*\.apk"' \
+                | head -1 | cut -d'"' -f4)
+          if [ -z "$URL" ]; then
+            echo "::error::не нашёл APK в релизах vr-usb-monitor"
+            exit 1
+          fi
+          echo "APK: $URL"
+          curl -fsSL -o build/vr-monitor.apk "$URL"
+          BT="$ANDROID_HOME/build-tools/35.0.0"
+          VC=$("$BT/aapt2" dump badging build/vr-monitor.apk \
+               | sed -n "s/.*versionCode='\([0-9]*\)'.*/\1/p" | head -1)
+          VN=$("$BT/aapt2" dump badging build/vr-monitor.apk \
+               | sed -n "s/.*versionName='\([^']*\)'.*/\1/p" | head -1)
+          test -n "$VC"
+          echo "$VC" > build/apk-versioncode
+          echo "VR Monitor $VN (versionCode $VC)"
+
+      - name: Assemble module zip
+        id: zip
+        run: |
+          set -eu
+          STAGE=build/module
+          mkdir -p "$STAGE"
+          cp module/* "$STAGE"/
+          cp build/out/classes.dex "$STAGE/vrdisplay.dex"
+          cp build/vr-monitor.apk "$STAGE/vr-monitor.apk"
+          cp build/apk-versioncode "$STAGE/apk-versioncode"
+
+          TAG="${GITHUB_REF_NAME}"
+          case "$GITHUB_REF" in
+            refs/tags/*)
+              VC=$(echo "$TAG" | tr -dc '0-9')
+              sed -i "s/^version=.*/version=$TAG/" "$STAGE/module.prop"
+              sed -i "s/^versionCode=.*/versionCode=${VC:-1}/" "$STAGE/module.prop"
+              ;;
+          esac
+
+          NAME="vr-display-mode-${TAG}.zip"
+          (cd "$STAGE" && zip -r "../../$NAME" . -x '.*')
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
+          unzip -l "$NAME"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: module-${{ github.sha }}
+          path: ${{ steps.zip.outputs.name }}
+          retention-days: 30
+
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: VR Display Mode ${{ github.ref_name }}
+          generate_release_notes: true
+          files: ${{ steps.zip.outputs.name }}
+
+      - name: Refresh update.json on main
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          set -eu
+          TAG="${GITHUB_REF_NAME}"
+          VC=$(echo "$TAG" | tr -dc '0-9')
+          cat > update.json <<JSON
+          {
+            "version": "$TAG",
+            "versionCode": ${VC:-1},
+            "zipUrl": "https://github.com/${GITHUB_REPOSITORY}/releases/download/$TAG/vr-display-mode-$TAG.zip",
+            "changelog": "https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/main/CHANGELOG.md"
+          }
+          JSON
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          git checkout main
+          git add update.json
+          git diff --cached --quiet || git commit -m "Point update.json at $TAG"
+          git push origin main
