@@ -48,6 +48,17 @@ input_fingerprint() {
     grep "^N: Name=" /proc/bus/input/devices 2>/dev/null | sort | cksum
 }
 
+# Один демон на систему. pkill по имени здесь ненадёжен: он не всегда
+# срабатывает из-за SELinux, а после ручных перезапусков экземпляры копились.
+PIDFILE=/data/adb/vr_display_mode.pid
+if [ -f "$PIDFILE" ]; then
+    OLD=$(cat "$PIDFILE" 2>/dev/null)
+    if [ -n "$OLD" ] && [ "$OLD" != "$$" ] && [ -d "/proc/$OLD" ]; then
+        kill -9 "$OLD" 2>/dev/null && log "остановлен прежний демон ($OLD)"
+    fi
+fi
+echo $$ > "$PIDFILE"
+
 log "демон: старт"
 prev=""
 prev_inputs=""
