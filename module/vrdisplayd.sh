@@ -72,7 +72,17 @@ while true; do
 
     if [ "$cur" != "$prev" ]; then
         log "DisplayPort: $cur"
-        [ "$cur" = "connected" ] && try_enable
+        if [ "$cur" = "connected" ]; then
+            # В режиме гарнитуры дисплей не включаем: иначе он и модуль
+            # VR Headset Mode тянули бы коннектор в разные стороны, а
+            # пользователь получал бы диалог "делать ли каст" на каждое
+            # подключение очков.
+            if [ "$(vr_mode)" = headset ]; then
+                log "режим гарнитуры — дисплей не включаю"
+            else
+                try_enable
+            fi
+        fi
         prev_inputs=$(input_fingerprint)
     elif [ "$cur" = "connected" ]; then
         # Дисплей на месте: следим за появлением новых указывающих устройств,

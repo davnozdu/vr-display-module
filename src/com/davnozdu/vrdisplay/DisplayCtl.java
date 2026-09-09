@@ -59,15 +59,22 @@ public final class DisplayCtl {
      * под то, что нашлось.
      */
     private static int[] displayIds(Object dm) throws Exception {
+        // Сначала ищем вариант с флагом и только потом без него.
+        // Раньше брался первый попавшийся, а порядок методов в рефлексии
+        // не гарантирован: если первой находилась версия без аргументов,
+        // она возвращала только уже включённые дисплеи — и подключённый,
+        // но ещё не подтверждённый пользователем, оставался невидимым.
+        // Именно его и нужно включить, чтобы снять диалог "делать ли каст".
+        Method noArg = null;
         for (Method m : dm.getClass().getMethods()) {
             if (!"getDisplayIds".equals(m.getName())) continue;
             Class<?>[] p = m.getParameterTypes();
-            if (p.length == 0) return (int[]) m.invoke(dm);
             if (p.length == 1 && p[0] == boolean.class) {
-                // true — включая ещё не включённые дисплеи, они нам и нужны
                 return (int[]) m.invoke(dm, Boolean.TRUE);
             }
+            if (p.length == 0) noArg = m;
         }
+        if (noArg != null) return (int[]) noArg.invoke(dm);
         throw new NoSuchMethodException("getDisplayIds");
     }
 

@@ -31,6 +31,17 @@ dp_connected() {
 # Включение внешнего дисплея. Системный вызов живёт в dex и требует root:
 # enableConnectedDisplay защищён signature-правом MANAGE_DISPLAYS, которое
 # обычному приложению не выдать, но проверка прав пропускает uid 0.
+# Режим очков, общий с модулем VR Headset Mode: monitor | headset.
+# В режиме гарнитуры дисплей включать нельзя — очки используются как
+# аудиоустройство, и поднятый рабочий стол там только мешает.
+vr_mode() {
+    m=$(cat /data/adb/vr_mode 2>/dev/null)
+    case "$m" in
+        headset) echo headset ;;
+        *)       echo monitor ;;
+    esac
+}
+
 enable_external_display() {
     CLASSPATH="$MODDIR/vrdisplay.dex" app_process /system/bin com.davnozdu.vrdisplay.DisplayCtl enable 2>&1
 }
