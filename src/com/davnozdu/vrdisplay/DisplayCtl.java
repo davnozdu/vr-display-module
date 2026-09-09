@@ -31,8 +31,10 @@ public final class DisplayCtl {
                 list();
             } else if ("enable".equals(cmd)) {
                 System.exit(enableExternal() ? 0 : 1);
+            } else if ("disable".equals(cmd)) {
+                System.exit(disableExternal() ? 0 : 1);
             } else {
-                System.err.println("usage: DisplayCtl [enable|pointer|list|methods <service> <iface>]");
+                System.err.println("usage: DisplayCtl [enable|disable|pointer|list|methods <service> <iface>]");
                 System.exit(2);
             }
         } catch (Throwable t) {
@@ -259,6 +261,45 @@ public final class DisplayCtl {
             }
         }
         if (!any) System.err.println("no external display to enable");
+        return any;
+    }
+
+    /**
+     * Выключить внешний дисплей, не разрывая DisplayPort.
+     *
+     * Принудительный disconnected на DRM-коннекторе не годится: очки
+     * считают потерю линка извлечением кабеля и сбрасываются целиком
+     * вместе со звуковой картой. Здесь коннектор остаётся подключённым,
+     * а Android просто перестаёт выводить кадры — очки видят отсутствие
+     * сигнала, гасят панели и остаются на USB.
+     *
+     * @return true, если хотя бы один внешний дисплей удалось выключить.
+     */
+    private static boolean disableExternal() throws Exception {
+        Object dm = displayManager();
+        Method disable = null;
+        for (Method m : dm.getClass().getMethods()) {
+            if ("disableConnectedDisplay".equals(m.getName())
+                    && m.getParameterTypes().length == 1) {
+                disable = m;
+                break;
+            }
+        }
+        if (disable == null) throw new NoSuchMethodException("disableConnectedDisplay");
+
+        boolean any = false;
+        for (int id : displayIds(dm)) {
+            if (id == 0) continue;                       // встроенный экран не трогаем
+            if (typeOf(displayInfo(dm, id)) != TYPE_EXTERNAL) continue;
+            try {
+                disable.invoke(dm, id);
+                System.out.println("disabled display " + id);
+                any = true;
+            } catch (Throwable t) {
+                System.err.println("display " + id + ": " + t.getCause());
+            }
+        }
+        if (!any) System.err.println("no external display to disable");
         return any;
     }
 
