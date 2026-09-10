@@ -1,7 +1,7 @@
 id=vr_display_mode
 name=VR Display Mode
-version=v1.5
-versionCode=15
+version=v1.6
+versionCode=16
 author=davnozdu
 description=Автоматически включает внешний дисплей (VR-очки) в режиме рабочего стола при подключении по DisplayPort. Ставит и обновляет приложение VR Monitor.
 updateJson=https://raw.githubusercontent.com/davnozdu/vr-display-module/main/update.json
