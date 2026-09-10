@@ -38,6 +38,23 @@ LogicalDisplayMapper: SetEnabled on display 7: true
 
 ---
 
+## Режим гарнитуры
+
+Утилита `DisplayCtl` умеет не только включать дисплей, но и выключать его:
+
+```sh
+CLASSPATH=/data/adb/modules/vr_display_mode/vrdisplay.dex \
+  app_process /system/bin com.davnozdu.vrdisplay.DisplayCtl disable
+```
+
+На этом построен модуль
+[VR Headset Mode](https://github.com/davnozdu/vr-headset-mode): очки
+работают как гарнитура, звук и микрофоны есть, картинки нет. Этот модуль
+включает дисплей при подключении, тот — гасит картинку через секунду.
+
+Гасить DisplayPort напрямую нельзя: прошивка очков считает потерю линка
+извлечением кабеля и сбрасывает устройство вместе со звуковой картой.
+
 ## Установка
 
 1. Скачайте zip из [Releases](https://github.com/davnozdu/vr-display-module/releases)
