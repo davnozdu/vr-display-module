@@ -18,6 +18,9 @@ public final class DisplayCtl {
 
     /** Display.TYPE_EXTERNAL */
     private static final int TYPE_EXTERNAL = 2;
+    /** android.view.Display.STATE_OFF / STATE_ON. */
+    private static final int STATE_OFF = 1;
+    private static final int STATE_ON  = 2;
 
     public static void main(String[] args) {
         String cmd = args.length > 0 ? args[0] : "enable";
@@ -33,8 +36,12 @@ public final class DisplayCtl {
                 System.exit(enableExternal() ? 0 : 1);
             } else if ("disable".equals(cmd)) {
                 System.exit(disableExternal() ? 0 : 1);
+            } else if ("poweroff".equals(cmd)) {
+                System.exit(powerExternal(STATE_OFF) ? 0 : 1);
+            } else if ("poweron".equals(cmd)) {
+                System.exit(powerExternal(STATE_ON) ? 0 : 1);
             } else {
-                System.err.println("usage: DisplayCtl [enable|disable|pointer|list|methods <service> <iface>]");
+                System.err.println("usage: DisplayCtl [enable|disable|poweroff|poweron|pointer|list|methods <service> <iface>]");
                 System.exit(2);
             }
         } catch (Throwable t) {
@@ -307,6 +314,43 @@ public final class DisplayCtl {
             }
         }
         if (!any) System.err.println("no external display to disable");
+        return any;
+    }
+
+    /**
+     * Погасить или зажечь внешний дисплей через requestDisplayPower.
+     *
+     * В отличие от disableConnectedDisplay, дисплей остаётся "включённым"
+     * с точки зрения системы — меняется только его питание. Поэтому Android
+     * не считает его заново подключённым и не переспрашивает про каст,
+     * а disableConnectedDisplay возвращает дисплей в состояние "подключён,
+     * но не подтверждён", и диалог всплывает снова.
+     */
+    private static boolean powerExternal(int state) throws Exception {
+        Object dm = displayManager();
+        Method power = null;
+        for (Method m : dm.getClass().getMethods()) {
+            if ("requestDisplayPower".equals(m.getName())
+                    && m.getParameterTypes().length == 2) {
+                power = m;
+                break;
+            }
+        }
+        if (power == null) throw new NoSuchMethodException("requestDisplayPower");
+
+        boolean any = false;
+        for (int id : displayIds(dm)) {
+            if (id == 0) continue;
+            if (typeOf(displayInfo(dm, id)) != TYPE_EXTERNAL) continue;
+            try {
+                power.invoke(dm, id, state);
+                System.out.println("power " + (state == STATE_OFF ? "off" : "on") + " display " + id);
+                any = true;
+            } catch (Throwable t) {
+                System.err.println("display " + id + ": " + t.getCause());
+            }
+        }
+        if (!any) System.err.println("no external display for power");
         return any;
     }
 
